@@ -22,6 +22,7 @@ int main()
     gpio_set_dir(LED_PIN, GPIO_OUT);
 
     gpio_init(BUTTON_PIN);
+    gpio_pull_up(BUTTON_PIN);
     gpio_set_dir(BUTTON_PIN, GPIO_IN);
 
     // Enable interrupts for button pin
