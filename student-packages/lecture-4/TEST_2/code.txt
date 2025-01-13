@@ -128,17 +128,17 @@ void display_dash(void)
 // Zobrazení jednotlivého znaku
 void display_character(char c)
 {
-    if (c == ' ')
+    if (c == ' ') // Mezera mezi slovy
     {
         sleep_ms(WORD_SPACE);
         return;
     }
 
-    if (c >= 'a' && c <= 'z')
-        c -= 32; // Převod na velká písmena
+    if (c >= 'a' && c <= 'z') // Převod na velká písmena
+        c -= 32;
 
-    if (c < 'A' || c > 'Z')
-        return; // Neplatný znak
+    if (c < 'A' || c > 'Z') // Neplatný znak
+        return;
 
     const char *pattern = MORSE_CODE[c - 'A'];
     while (*pattern)
