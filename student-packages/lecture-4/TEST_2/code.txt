@@ -1,0 +1,196 @@
+#include <stdio.h>
+#include "pico/stdlib.h"
+#include "hardware/pwm.h"
+#include "hardware/adc.h"
+
+// GPIO konfigurace
+#define LED_PIN 15       // Pin pro LED (PWM podporován)
+#define POT_PIN 26       // Pin pro potenciometr (ADC podporován)
+
+// PWM konfigurace
+#define PWM_WRAP 255     // Rozlišení pro PWM (8 bitů)
+
+// Časové definice (v milisekundách)
+#define DOT_DURATION 200
+#define DASH_DURATION (DOT_DURATION * 3)
+#define SYMBOL_SPACE DOT_DURATION
+#define LETTER_SPACE (DOT_DURATION * 3)
+#define WORD_SPACE (DOT_DURATION * 7)
+#define MAX_INPUT 100
+
+// Morseova abeceda
+const char *MORSE_CODE[] = {
+    ".-", "-...", "-.-.", "-..", ".", "..-.", "--.", "....", "..", ".---",
+    "-.-", ".-..", "--", "-.", "---", ".--.", "--.-", ".-.", "...", "-",
+    "..-", "...-", ".--", "-..-", "-.--", "--.."
+};
+
+// Deklarace funkcí
+void init_pwm(void);
+void init_adc(void);
+uint16_t read_brightness(void);
+void set_led_brightness(uint16_t brightness);
+void display_dot(void);
+void display_dash(void);
+void display_character(char c);
+bool read_line(char *buffer, int max_length);
+void clear_input_buffer(void);
+
+int main()
+{
+    stdio_init_all();
+    sleep_ms(2000); // Čekání na inicializaci USB
+
+    // Inicializace hardwaru
+    init_pwm();
+    init_adc();
+
+    printf("Morse Code LED Controller\n");
+    printf("Use potentiometer to control LED brightness\n\n");
+
+    char input[MAX_INPUT];
+
+    while (true)
+    {
+        printf("Enter text to convert to Morse code (max %d chars): ", MAX_INPUT - 1);
+
+        if (read_line(input, MAX_INPUT))
+        {
+            printf("Converting: %s\n", input);
+
+            for (int i = 0; input[i] != '\0'; i++)
+            {
+                display_character(input[i]);
+            }
+
+            printf("\nConversion complete!\n\n");
+        }
+
+        clear_input_buffer(); // Vymazání vstupního bufferu
+        sleep_ms(100);
+    }
+
+    return 0;
+}
+
+// Inicializace PWM pro LED
+void init_pwm(void)
+{
+    gpio_set_function(LED_PIN, GPIO_FUNC_PWM);
+    uint slice_num = pwm_gpio_to_slice_num(LED_PIN);
+    pwm_set_wrap(slice_num, PWM_WRAP);
+    pwm_set_chan_level(slice_num, PWM_CHAN_A, 0);
+    pwm_set_enabled(slice_num, true);
+}
+
+// Inicializace ADC pro potenciometr
+void init_adc(void)
+{
+    adc_init();
+    adc_gpio_init(POT_PIN);
+    adc_select_input(0); // GPIO26 odpovídá ADC input 0
+}
+
+// Čtení hodnoty z potenciometru a převod na rozsah PWM
+uint16_t read_brightness(void)
+{
+    uint16_t raw_value = adc_read(); // Rozsah 0-4095
+    return (raw_value * PWM_WRAP) / 4095; // Převod na rozsah 0-PWM_WRAP
+}
+
+// Nastavení jasu LED pomocí PWM
+void set_led_brightness(uint16_t brightness)
+{
+    uint slice_num = pwm_gpio_to_slice_num(LED_PIN);
+    pwm_set_chan_level(slice_num, PWM_CHAN_A, brightness);
+}
+
+// Zobrazení Morseovy tečky
+void display_dot(void)
+{
+    uint16_t brightness = read_brightness();
+    set_led_brightness(brightness);
+    sleep_ms(DOT_DURATION);
+    set_led_brightness(0);
+    sleep_ms(SYMBOL_SPACE);
+}
+
+// Zobrazení Morseovy čárky
+void display_dash(void)
+{
+    uint16_t brightness = read_brightness();
+    set_led_brightness(brightness);
+    sleep_ms(DASH_DURATION);
+    set_led_brightness(0);
+    sleep_ms(SYMBOL_SPACE);
+}
+
+// Zobrazení jednotlivého znaku
+void display_character(char c)
+{
+    if (c == ' ')
+    {
+        sleep_ms(WORD_SPACE);
+        return;
+    }
+
+    if (c >= 'a' && c <= 'z')
+        c -= 32; // Převod na velká písmena
+
+    if (c < 'A' || c > 'Z')
+        return; // Neplatný znak
+
+    const char *pattern = MORSE_CODE[c - 'A'];
+    while (*pattern)
+    {
+        if (*pattern == '.')
+            display_dot();
+        else if (*pattern == '-')
+            display_dash();
+        pattern++;
+    }
+
+    sleep_ms(LETTER_SPACE);
+}
+
+// Vymazání vstupního bufferu
+void clear_input_buffer(void)
+{
+    while (getchar_timeout_us(0) != PICO_ERROR_TIMEOUT)
+    {
+        // Vymazání zbývajících znaků
+    }
+}
+
+// Čtení vstupu od uživatele
+bool read_line(char *buffer, int max_length)
+{
+    int index = 0;
+    int c;
+
+    while (index < max_length - 1)
+    {
+        c = getchar_timeout_us(50000);
+
+        if (c == PICO_ERROR_TIMEOUT)
+        {
+            if (index == 0)
+                continue;
+            break;
+        }
+
+        if (c == '\r' || c == '\n')
+        {
+            if (index > 0)
+                break;
+            continue;
+        }
+
+        putchar(c);
+        buffer[index++] = (char)c;
+    }
+
+    buffer[index] = '\0';
+    putchar('\n');
+    return index > 0;
+}
